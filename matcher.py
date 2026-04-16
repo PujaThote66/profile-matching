@@ -1,16 +1,22 @@
-
 import re
-from sentence_transformers import CrossEncoder, SentenceTransformer
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.cluster import AgglomerativeClustering
 
 from keyword_extractor import extract_key_phrases
 from bm25_utils import bm25_scores
 
 # ------------------------------------------------
-# Models
+# ✅ Lazy-loaded Sentence Transformer
 # ------------------------------------------------
-cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-embedder = SentenceTransformer("all-MiniLM-L6-v2")
+_embedder = None
+
+def get_embedder():
+    global _embedder
+    if _embedder is None:
+        _embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    return _embedder
+
 
 # ------------------------------------------------
 # Phrase cleaning
@@ -35,6 +41,7 @@ def clean_phrases(phrases):
             cleaned.append(p)
 
     return list(set(cleaned))
+
 
 # ------------------------------------------------
 # Skill confidence logic
@@ -89,6 +96,7 @@ def get_skill_confidence(text, skill):
 
     return 0.0
 
+
 # ------------------------------------------------
 # Skill aggregation helpers
 # ------------------------------------------------
@@ -110,13 +118,15 @@ def matched_phrases(profile, phrases):
         if get_skill_confidence(profile, p) > 0
     }
 
+
 # ------------------------------------------------
-# Dynamic skill clustering
+# Dynamic skill clustering (unchanged)
 # ------------------------------------------------
 def cluster_skills(jd_phrases, max_clusters=4):
     if len(jd_phrases) <= 2:
         return [jd_phrases]
 
+    embedder = get_embedder()
     embeddings = embedder.encode(jd_phrases)
 
     n_clusters = min(max_clusters, len(jd_phrases) // 2 + 1)
@@ -135,27 +145,36 @@ def cluster_skills(jd_phrases, max_clusters=4):
 
     return list(clusters.values())
 
+
 # ------------------------------------------------
-# FINAL SCORING
+# ✅ FINAL SCORING (CrossEncoder REMOVED)
 # ------------------------------------------------
 def score_candidates(jd, candidates, algo_choice="Semantic Only"):
     jd_phrases = clean_phrases(extract_key_phrases(jd))
     skill_clusters = cluster_skills(jd_phrases)
 
-    pairs = [[jd, c] for c in candidates]
-    raw_semantic = cross_encoder.predict(pairs)
+    embedder = get_embedder()
 
-    min_s, max_s = min(raw_semantic), max(raw_semantic)
+    jd_embedding = embedder.encode(jd)
+    resume_embeddings = embedder.encode(candidates)
+
+    raw_semantic = cosine_similarity(
+        [jd_embedding], resume_embeddings
+    )[0]
+
+    min_s, max_s = raw_semantic.min(), raw_semantic.max()
     semantic_scores = [
         float((s - min_s) / (max_s - min_s)) if max_s != min_s else 0.0
         for s in raw_semantic
     ]
 
-    bm25_scores_list = [float(x) for x in bm25_scores(" ".join(jd_phrases), candidates)]
+    bm25_scores_list = [
+        float(x) for x in bm25_scores(" ".join(jd_phrases), candidates)
+    ]
+
     results = []
 
     for i, profile in enumerate(candidates):
-
         skill_score = float(keyword_coverage(profile, jd_phrases))
 
         if algo_choice == "Semantic Only":
@@ -171,7 +190,7 @@ def score_candidates(jd, candidates, algo_choice="Semantic Only"):
 
         results.append({
             "candidate": f"Candidate {i + 1}",
-            "final_score": round(float(final), 2),
+            "final_score": round(final, 2),
             "matched_phrases": {
                 k: float(v) for k, v in matched_phrases(profile, jd_phrases).items()
             }
