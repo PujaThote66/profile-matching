@@ -100,7 +100,7 @@ if st.button("Generate Interview Questions"):
             response = requests.post(
                 f"{API_BASE_URL}/interview-questions",
                 json=payload,
-                timeout=120
+                timeout=300
             )
         except Exception as e:
             st.error(f"❌ Failed to connect to backend: {e}")

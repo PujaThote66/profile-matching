@@ -114,7 +114,7 @@ if st.button("🔍 Match Candidates"):
                 response = requests.post(
                     f"{API_BASE_URL}/match",
                     json=payload,
-                    timeout=120
+                    timeout=300
                 )
             except Exception as e:
                 st.error(f"Backend connection failed: {e}")
