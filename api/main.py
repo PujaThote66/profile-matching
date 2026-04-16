@@ -1,4 +1,3 @@
-# api/main.py
 
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
@@ -33,14 +32,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-# -----------------------------------------------------
-# Health Check
-# -----------------------------------------------------
-@app.get("/")
-def health_check():
-    return {"status": "API is running"}
 
 
 # -----------------------------------------------------
@@ -204,7 +195,7 @@ def save_interview_feedback(
 
 
 # -----------------------------------------------------
-# ✅ GET ALL INTERVIEWS API (UPDATED WITH EXCEPTION HANDLING)
+# ✅ GET ALL INTERVIEWS API 
 # -----------------------------------------------------
 @app.get("/interviews", response_model=List[InterviewResponse])
 def get_all_interviews(db: Session = Depends(get_db)):

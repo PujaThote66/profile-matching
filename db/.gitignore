@@ -1,6 +1,26 @@
-.env
+# Python
 __pycache__/
 *.pyc
+*.pyo
+
+# Virtual environments
+jd_match/
+venv/
+.env/
+
+# SQLite DB
 *.db
 *.sqlite3
-venv
+
+# ML / HuggingFace cache
+.cache/
+huggingface/
+transformers/
+*.pt
+*.bin
+*.onnx
+
+# OS files
+.DS_Store
+Thumbs.db
+``

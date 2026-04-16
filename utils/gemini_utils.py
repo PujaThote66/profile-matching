@@ -1,4 +1,3 @@
-# utils/gemini_utils.py
 
 import os
 from dotenv import load_dotenv
@@ -44,7 +43,6 @@ def get_compatible_model():
 
 # Initialize model safely
 model = get_compatible_model()
-
 
 # ------------------------------------------------------
 # Interview Question Generator

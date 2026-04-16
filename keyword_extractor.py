@@ -1,4 +1,3 @@
-# keyword_extractor.py
 
 import spacy
 import re

@@ -2,9 +2,7 @@
 
 from sqlalchemy import Column, Integer, String, Text, Float, DateTime
 from datetime import datetime
-
 from db.database import Base
-
 
 class Job(Base):
     __tablename__ = "jobs"

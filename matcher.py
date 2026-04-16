@@ -1,4 +1,3 @@
-# matcher.py
 
 import re
 from sentence_transformers import CrossEncoder, SentenceTransformer
@@ -7,13 +6,11 @@ from sklearn.cluster import AgglomerativeClustering
 from keyword_extractor import extract_key_phrases
 from bm25_utils import bm25_scores
 
-
 # ------------------------------------------------
 # Models
 # ------------------------------------------------
 cross_encoder = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
-
 
 # ------------------------------------------------
 # Phrase cleaning
@@ -38,7 +35,6 @@ def clean_phrases(phrases):
             cleaned.append(p)
 
     return list(set(cleaned))
-
 
 # ------------------------------------------------
 # Skill confidence logic
@@ -93,7 +89,6 @@ def get_skill_confidence(text, skill):
 
     return 0.0
 
-
 # ------------------------------------------------
 # Skill aggregation helpers
 # ------------------------------------------------
@@ -114,7 +109,6 @@ def matched_phrases(profile, phrases):
         for p in phrases
         if get_skill_confidence(profile, p) > 0
     }
-
 
 # ------------------------------------------------
 # Dynamic skill clustering
@@ -140,7 +134,6 @@ def cluster_skills(jd_phrases, max_clusters=4):
         clusters.setdefault(label, []).append(phrase)
 
     return list(clusters.values())
-
 
 # ------------------------------------------------
 # FINAL SCORING

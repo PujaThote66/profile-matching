@@ -1,5 +1,3 @@
-# db/init_db.py
-
 from db.database import engine, Base
 from db import models  # Important: imports all tables
 
