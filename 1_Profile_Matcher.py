@@ -15,6 +15,46 @@ st.set_page_config(
     layout="wide"
 )
 
+# =================================================
+# 🔑 GEMINI API KEY GATE  (NEW)
+# =================================================
+if "gemini_api_key" not in st.session_state:
+    st.session_state.gemini_api_key = ""
+
+if not st.session_state.gemini_api_key:
+    st.title("🔑 Gemini API Key Required")
+
+    st.info(
+        "Please enter your Gemini API key to continue.\n\n"
+        "✅ The key is used only for this session.\n"
+        "✅ It is not stored or logged."
+    )
+
+    api_key = st.text_input(
+        "Enter Gemini API Key",
+        type="password",
+        placeholder="AIza..."
+    )
+
+    if st.button("Save & Continue"):
+        if api_key.strip():
+            st.session_state.gemini_api_key = api_key.strip()
+            st.experimental_rerun()
+        else:
+            st.error("API key cannot be empty.")
+
+    st.stop()
+
+# ------------------------------------------------
+# Common Headers (USED FOR ALL BACKEND CALLS)
+# ------------------------------------------------
+HEADERS = {
+    "X-GEMINI-API-KEY": st.session_state.gemini_api_key
+}
+
+# =================================================
+# MAIN APP STARTS HERE
+# =================================================
 st.title("🎯 Profile Matching")
 st.write("Works for **any job role** using automatic JD keyword extraction")
 
@@ -42,7 +82,7 @@ selected_algo = st.radio(
 )
 
 # ------------------------------------------------
-# Candidate Count Selection
+# Candidate Count
 # ------------------------------------------------
 st.markdown("### 👥 Candidate Selection")
 
@@ -75,108 +115,80 @@ for i in range(num_candidates):
     candidates.append(profile)
 
 # ------------------------------------------------
-# Match Button with Validation
+# Match Button
 # ------------------------------------------------
 if st.button("🔍 Match Candidates"):
 
-    # ❌ Case 1: JD empty
     if not jd.strip():
         st.error("❌ Job Description cannot be empty.")
         st.stop()
 
-    # ❌ Case 2: All candidates empty
     elif len(empty_indices) == num_candidates:
-        st.error(
-            "❌ No candidate profiles provided.\n\n"
-            "👉 Please enter at least one candidate profile."
-        )
+        st.error("❌ Please enter at least one candidate profile.")
         st.stop()
 
-    # ⚠️ Case 3: Some candidates missing
     elif empty_indices:
         st.warning(
-            f"⚠️ Profiles missing for candidates: "
-            f"{', '.join(map(str, empty_indices))}.\n\n"
-            "👉 Please fill all candidate profiles."
+            f"⚠️ Profiles missing for candidates: {', '.join(map(str, empty_indices))}"
         )
         st.stop()
 
-    # ✅ Valid → Call backend
-    else:
-        payload = {
-            "job_description": jd,
-            "candidates": candidates,
-            "algorithm": selected_algo
-        }
+    payload = {
+        "job_description": jd,
+        "candidates": candidates,
+        "algorithm": selected_algo
+    }
 
-        with st.spinner("Matching candidates..."):
-            try:
-                response = requests.post(
-                    f"{API_BASE_URL}/match",
-                    json=payload,
-                    timeout=300
-                )
-            except Exception as e:
-                st.error(f"Backend connection failed: {e}")
-                st.stop()
-
-        if response.status_code != 200:
-            st.error(f"API error: {response.text}")
+    with st.spinner("Matching candidates..."):
+        try:
+            response = requests.post(
+                f"{API_BASE_URL}/match",
+                json=payload,
+                headers=HEADERS,
+                timeout=300
+            )
+        except Exception as e:
+            st.error(f"Backend connection failed: {e}")
             st.stop()
 
-        data = response.json()
-        results = data["results"]
-        extracted_keywords = data.get("extracted_keywords", [])
+    if response.status_code != 200:
+        st.error(response.text)
+        st.stop()
 
-        df = (
-            pd.DataFrame(results)
-            .sort_values("final_score", ascending=False)
-            .reset_index(drop=True)
-        )
+    data = response.json()
+    df = pd.DataFrame(data["results"]).sort_values(
+        "final_score", ascending=False
+    )
 
-        # ------------------------------------------------
-        # Store for other pages
-        # ------------------------------------------------
-        st.session_state["jd"] = jd
-        st.session_state["candidates"] = candidates
+    st.subheader("✅ Candidate Scores")
+    st.dataframe(df.drop(columns=["matched_phrases"]), use_container_width=True)
 
-        if "algorithm_results" not in st.session_state:
-            st.session_state["algorithm_results"] = {}
+# =================================================
+# 📂 NEW BUTTON – FETCH ALL INTERVIEWS FROM DB
+# =================================================
+st.markdown("---")
+st.subheader("📂 Stored Interviews")
 
-        st.session_state["algorithm_results"][selected_algo] = df
-
-        top_score = df["final_score"].max()
-        top_candidates = df[df["final_score"] == top_score]["candidate"].tolist()
-
-        if "top_candidates" not in st.session_state:
-            st.session_state["top_candidates"] = {}
-
-        st.session_state["top_candidates"][selected_algo] = top_candidates
-
-        # ------------------------------------------------
-        # UI Output
-        # ------------------------------------------------
-        st.subheader("📌 Extracted JD Key Phrases")
-        if extracted_keywords:
-            st.write(", ".join(extracted_keywords))
-        else:
-            st.info("No key phrases extracted.")
-
-        st.subheader("✅ Candidate Scores")
-        st.dataframe(
-            df.drop(columns=["matched_phrases"]),
-            use_container_width=True
-        )
-
-        if len(top_candidates) == 1:
-            st.success(
-                f"🏆 Best Match: **{top_candidates[0]}** "
-                f"using **{selected_algo}** "
-                f"with **{top_score}%** match"
+if st.button("📥 Get All Interview Records"):
+    with st.spinner("Fetching interview records..."):
+        try:
+            resp = requests.get(
+                f"{API_BASE_URL}/interviews",
+                headers=HEADERS,
+                timeout=120
             )
-        else:
-            st.success(
-                f"🏆 Best Matches (Tie at {top_score}% using {selected_algo})"
-            )
-            for cand in top_candidates:
-                st.markdown(f"- ✅ **{cand}**")
+        except Exception as e:
+            st.error(f"Backend connection failed: {e}")
+            st.stop()
+
+    if resp.status_code != 200:
+        st.error(resp.text)
+        st.stop()
+
+    interviews = resp.json()
+
+    if not interviews:
+        st.info("No interview records found.")
+    else:
+        df_interviews = pd.DataFrame(interviews)
+        st.dataframe(df_interviews, use_container_width=True)
