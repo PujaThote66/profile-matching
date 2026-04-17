@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # =================================================
-# 🔑 GEMINI API KEY GATE  (NEW)
+# 🔑 GEMINI API KEY GATE
 # =================================================
 if "gemini_api_key" not in st.session_state:
     st.session_state.gemini_api_key = ""
@@ -39,21 +39,21 @@ if not st.session_state.gemini_api_key:
     if st.button("Save & Continue"):
         if api_key.strip():
             st.session_state.gemini_api_key = api_key.strip()
-            st.experimental_rerun()
+            st.rerun()   # ✅ FIXED (was experimental_rerun)
         else:
             st.error("API key cannot be empty.")
 
     st.stop()
 
 # ------------------------------------------------
-# Common Headers (USED FOR ALL BACKEND CALLS)
+# Headers for backend calls
 # ------------------------------------------------
 HEADERS = {
     "X-GEMINI-API-KEY": st.session_state.gemini_api_key
 }
 
 # =================================================
-# MAIN APP STARTS HERE
+# MAIN APP
 # =================================================
 st.title("🎯 Profile Matching")
 st.write("Works for **any job role** using automatic JD keyword extraction")
@@ -156,39 +156,14 @@ if st.button("🔍 Match Candidates"):
         st.stop()
 
     data = response.json()
-    df = pd.DataFrame(data["results"]).sort_values(
-        "final_score", ascending=False
+    df = (
+        pd.DataFrame(data["results"])
+        .sort_values("final_score", ascending=False)
+        .reset_index(drop=True)
     )
 
     st.subheader("✅ Candidate Scores")
-    st.dataframe(df.drop(columns=["matched_phrases"]), use_container_width=True)
-
-# =================================================
-# 📂 NEW BUTTON – FETCH ALL INTERVIEWS FROM DB
-# =================================================
-st.markdown("---")
-st.subheader("📂 Stored Interviews")
-
-if st.button("📥 Get All Interview Records"):
-    with st.spinner("Fetching interview records..."):
-        try:
-            resp = requests.get(
-                f"{API_BASE_URL}/interviews",
-                headers=HEADERS,
-                timeout=120
-            )
-        except Exception as e:
-            st.error(f"Backend connection failed: {e}")
-            st.stop()
-
-    if resp.status_code != 200:
-        st.error(resp.text)
-        st.stop()
-
-    interviews = resp.json()
-
-    if not interviews:
-        st.info("No interview records found.")
-    else:
-        df_interviews = pd.DataFrame(interviews)
-        st.dataframe(df_interviews, use_container_width=True)
+    st.dataframe(
+        df.drop(columns=["matched_phrases"], errors="ignore"),
+        use_container_width=True
+    )
