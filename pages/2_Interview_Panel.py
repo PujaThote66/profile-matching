@@ -10,11 +10,42 @@ API_BASE_URL = "https://profile-matching-api.onrender.com"
 st.set_page_config(page_title="Interview Panel", layout="wide")
 st.title("🧑‍💼 Interview Panel")
 
+# ======================================================
+# 🔑 GEMINI API KEY GATE (NEW)
+# ======================================================
+if "gemini_api_key" not in st.session_state:
+    st.session_state.gemini_api_key = ""
+
+if not st.session_state.gemini_api_key:
+    st.info(
+        "🔑 Please enter your Gemini API key to continue.\n\n"
+        "✅ The key is used only for this session.\n"
+        "✅ It is not stored or logged."
+    )
+
+    api_key = st.text_input(
+        "Enter Gemini API Key",
+        type="password",
+        placeholder="AIza..."
+    )
+
+    if st.button("Save & Continue"):
+        if api_key.strip():
+            st.session_state.gemini_api_key = api_key.strip()
+            st.experimental_rerun()
+        else:
+            st.error("API key cannot be empty.")
+
+    st.stop()
+
+HEADERS = {
+    "X-GEMINI-API-KEY": st.session_state.gemini_api_key
+}
+
 # ------------------------------------------------------
 # ✅ Global Guard: Ensure Profile Matcher ran first
 # ------------------------------------------------------
 required_keys = ["jd", "candidates", "top_candidates"]
-
 missing_keys = [k for k in required_keys if k not in st.session_state]
 
 if missing_keys:
@@ -66,10 +97,6 @@ selected_candidate = st.selectbox(
 jd = st.session_state.get("jd", "").strip()
 candidates = st.session_state.get("candidates", [])
 
-if not jd:
-    st.error("❌ Job Description data is missing.")
-    st.stop()
-
 try:
     candidate_index = int(selected_candidate.split()[-1]) - 1
     candidate_resume = candidates[candidate_index].strip()
@@ -80,12 +107,8 @@ except Exception:
     )
     st.stop()
 
-if not candidate_resume:
-    st.warning("⚠️ Candidate resume is empty.")
-    st.stop()
-
 # ------------------------------------------------------
-# Interview Question Generation (Via Backend API ✅)
+# Interview Question Generation (🔑 Gemini via Backend)
 # ------------------------------------------------------
 st.subheader("🧠 Behavioral & L1 Technical Questions")
 
@@ -100,6 +123,7 @@ if st.button("Generate Interview Questions"):
             response = requests.post(
                 f"{API_BASE_URL}/interview-questions",
                 json=payload,
+                headers=HEADERS,
                 timeout=300
             )
         except Exception as e:
@@ -107,15 +131,15 @@ if st.button("Generate Interview Questions"):
             st.stop()
 
     if response.status_code != 200:
-        st.error(f"❌ API error: {response.text}")
+        st.error(response.text)
         st.stop()
 
     questions = response.json().get("questions", "")
 
-    if not questions.strip():
-        st.error("❌ Gemini returned an empty response.")
-    else:
+    if questions.strip():
         st.session_state["generated_questions"] = questions
+    else:
+        st.error("❌ Gemini returned an empty response.")
 
 # ------------------------------------------------------
 # Display Questions
