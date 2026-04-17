@@ -9,9 +9,7 @@ API_BASE_URL = "https://profile-matching-api.onrender.com"
 # ------------------------------------------------------
 st.set_page_config(page_title="Interview Panel", layout="wide")
 st.title("🧑‍💼 Interview Panel")
-
-# ======================================================
-# 🔑 GEMINI API KEY GATE (NEW)
+# 🔑 GEMINI API KEY INPUT
 # ======================================================
 if "gemini_api_key" not in st.session_state:
     st.session_state.gemini_api_key = ""
@@ -19,8 +17,8 @@ if "gemini_api_key" not in st.session_state:
 if not st.session_state.gemini_api_key:
     st.info(
         "🔑 Please enter your Gemini API key to continue.\n\n"
-        "✅ The key is used only for this session.\n"
-        "✅ It is not stored or logged."
+        "✅ Used only for this session\n"
+        "✅ Not stored or logged"
     )
 
     api_key = st.text_input(
@@ -32,7 +30,7 @@ if not st.session_state.gemini_api_key:
     if st.button("Save & Continue"):
         if api_key.strip():
             st.session_state.gemini_api_key = api_key.strip()
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("API key cannot be empty.")
 
@@ -43,9 +41,9 @@ HEADERS = {
 }
 
 # ------------------------------------------------------
-# ✅ Global Guard: Ensure Profile Matcher ran first
+# ✅ Ensure Profile Matcher ran first
 # ------------------------------------------------------
-required_keys = ["jd", "candidates", "top_candidates"]
+required_keys = ["jd", "candidates", "top_candidates", "algorithm_results"]
 missing_keys = [k for k in required_keys if k not in st.session_state]
 
 if missing_keys:
@@ -84,31 +82,25 @@ if not top_candidates:
 # ------------------------------------------------------
 # Candidate Selection
 # ------------------------------------------------------
-st.subheader("👤 Select Candidate for Interview")
+st.subheader("👤 Select Candidate")
 
-selected_candidate = st.selectbox(
-    "Top candidates:",
-    top_candidates
-)
+selected_candidate = st.selectbox("Top candidates:", top_candidates)
 
 # ------------------------------------------------------
-# Fetch JD & Candidate Resume
+# Fetch JD & Resume
 # ------------------------------------------------------
-jd = st.session_state.get("jd", "").strip()
-candidates = st.session_state.get("candidates", [])
+jd = st.session_state["jd"]
+candidates = st.session_state["candidates"]
 
 try:
     candidate_index = int(selected_candidate.split()[-1]) - 1
-    candidate_resume = candidates[candidate_index].strip()
+    candidate_resume = candidates[candidate_index]
 except Exception:
-    st.error(
-        "❌ Unable to load candidate resume.\n\n"
-        "Please re-run matching on the Profile Matcher page."
-    )
+    st.error("❌ Unable to load candidate resume.")
     st.stop()
 
 # ------------------------------------------------------
-# Interview Question Generation (🔑 Gemini via Backend)
+# Interview Question Generation
 # ------------------------------------------------------
 st.subheader("🧠 Behavioral & L1 Technical Questions")
 
@@ -118,24 +110,19 @@ if st.button("Generate Interview Questions"):
         "candidate_resume": candidate_resume
     }
 
-    with st.spinner("Generating questions using Gemini..."):
-        try:
-            response = requests.post(
-                f"{API_BASE_URL}/interview-questions",
-                json=payload,
-                headers=HEADERS,
-                timeout=300
-            )
-        except Exception as e:
-            st.error(f"❌ Failed to connect to backend: {e}")
-            st.stop()
+    with st.spinner("Generating interview questions..."):
+        response = requests.post(
+            f"{API_BASE_URL}/interview-questions",
+            json=payload,
+            headers=HEADERS,
+            timeout=300
+        )
 
     if response.status_code != 200:
         st.error(response.text)
         st.stop()
 
     questions = response.json().get("questions", "")
-
     if questions.strip():
         st.session_state["generated_questions"] = questions
     else:
@@ -172,29 +159,71 @@ score = st.slider(
 )
 
 # ------------------------------------------------------
-# Save Interview Evaluation
+# ✅ Save Interview Feedback to DATABASE (NO DECISION UI)
 # ------------------------------------------------------
-if "interview_scores" not in st.session_state:
-    st.session_state["interview_scores"] = {}
+st.subheader("💾 Save Interview Feedback")
 
-if st.button("💾 Save Interview Evaluation"):
-    st.session_state["interview_scores"][selected_candidate] = {
-        "algorithm": algorithm_choice,
-        "score": score,
-        "notes": panel_notes
-    }
-    st.success("✅ Interview evaluation saved successfully")
+if st.button("Save Interview Feedback to Database"):
 
-# ------------------------------------------------------
-# Score Sheet
-# ------------------------------------------------------
-st.subheader("📊 Interview Score Sheet")
+    if "generated_questions" not in st.session_state:
+        st.error("Please generate interview questions first.")
+        st.stop()
 
-if st.session_state["interview_scores"]:
-    score_df = pd.DataFrame.from_dict(
-        st.session_state["interview_scores"],
-        orient="index"
+    # Get match score from previous results
+    result_df = st.session_state["algorithm_results"][algorithm_choice]
+    match_score = float(
+        result_df[result_df["candidate"] == selected_candidate]["final_score"].iloc[0]
     )
-    st.dataframe(score_df)
-else:
-    st.info("No interview evaluations recorded yet.")
+
+    payload = {
+        "job_description": jd,
+        "candidate_name": selected_candidate,
+        "candidate_resume": candidate_resume,
+        "algorithm_used": algorithm_choice,
+        "match_score": match_score,
+        "interview_questions": st.session_state["generated_questions"],
+        "panel_feedback": panel_notes,
+        "panel_rating": score,
+        "decision": "HOLD"   # ✅ DEFAULT (no UI)
+    }
+
+    with st.spinner("Saving interview feedback..."):
+        response = requests.post(
+            f"{API_BASE_URL}/save-interview-feedback",
+            json=payload,
+            headers=HEADERS,
+            timeout=150
+        )
+
+    if response.status_code != 200:
+        st.error(response.text)
+    else:
+        st.success("✅ Interview feedback saved successfully")
+
+# ======================================================
+# ✅ GET ALL INTERVIEW HISTORY
+# ======================================================
+st.markdown("---")
+st.subheader("📂 Interview History (Database)")
+
+if st.button("📥 Get All Interview History"):
+    with st.spinner("Fetching interview history..."):
+        resp = requests.get(
+            f"{API_BASE_URL}/interviews",
+            headers=HEADERS,
+            timeout=120
+        )
+
+    if resp.status_code != 200:
+        st.error(resp.text)
+        st.stop()
+
+    interviews = resp.json()
+
+    if not interviews:
+        st.info("No interview history found.")
+    else:
+        df_history = pd.DataFrame(interviews)
+        st.dataframe(df_history, use_container_width=True)
+
+
