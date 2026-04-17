@@ -39,7 +39,7 @@ if not st.session_state.gemini_api_key:
     if st.button("Save & Continue"):
         if api_key.strip():
             st.session_state.gemini_api_key = api_key.strip()
-            st.rerun()   # ✅ FIXED (was experimental_rerun)
+            st.rerun()   # ✅ correct API
         else:
             st.error("API key cannot be empty.")
 
@@ -161,6 +161,23 @@ if st.button("🔍 Match Candidates"):
         .sort_values("final_score", ascending=False)
         .reset_index(drop=True)
     )
+
+    # Store for Interview Panel page
+    st.session_state["jd"] = jd
+    st.session_state["candidates"] = candidates
+
+    if "algorithm_results" not in st.session_state:
+        st.session_state["algorithm_results"] = {}
+
+    st.session_state["algorithm_results"][selected_algo] = df
+
+    top_score = df["final_score"].max()
+    top_candidates = df[df["final_score"] == top_score]["candidate"].tolist()
+
+    if "top_candidates" not in st.session_state:
+        st.session_state["top_candidates"] = {}
+
+    st.session_state["top_candidates"][selected_algo] = top_candidates
 
     st.subheader("✅ Candidate Scores")
     st.dataframe(
